@@ -55,9 +55,9 @@ def get_producer():
 
 
 
-
-# presist event fucntion 
-# def persist_event(payload):
+ 
+# presist event fucntion (may use later)
+#  def persist_event(payload):
     event_record = {
         'id': str(payload.event_id),
         'timestamp': payload.timestamp,
@@ -75,7 +75,6 @@ def get_producer():
             """),
             event_record,
         )
-
 
 
 
@@ -111,9 +110,6 @@ async def get_data(request: Request):
         else:
             return {"error": "kafka producer unavailable"}
     
-    
-        persist_event(payload)
-            return {"status": "Data received and stored locally ✌️}
         
     except Exception as e:
         return {"error": str(e)}, 500

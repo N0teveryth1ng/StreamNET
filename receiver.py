@@ -12,10 +12,10 @@ from dotenv import load_dotenv
 
 
 
-load_dotenv()
+# load_dotenv()
 
-DATABASE_URL = os.getenv('DATABASE_URL')
-engine = create_engine(DATABASE_URL)
+# DATABASE_URL = os.getenv('DATABASE_URL')
+# engine = create_engine(DATABASE_URL)
 
 config = {
     'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092'),
@@ -57,26 +57,26 @@ last_flush_time = time.time()
 
 
 # store the data in DB
-def flush_to_destination():
-    global batch_buffer, last_flush_time
-    if not batch_buffer:
-        last_flush_time = time.time()
-        return
+# def flush_to_destination():
+    # global batch_buffer, last_flush_time
+    # if not batch_buffer:
+    #     last_flush_time = time.time()
+    #     return
 
-    try:
-        print(f"Flushing {len(batch_buffer)} records to database")
-        with engine.begin() as conn:
-            query = text("""
-                INSERT INTO system_events (id, timestamp, service_name, environment, event_type, message, metadata)
-                VALUES (:id, :timestamp, :service_name, :environment, :event_type, :message, :metadata)
-            """)
-            conn.execute(query, batch_buffer)
+    # try:
+    #     print(f"Flushing {len(batch_buffer)} records to database")
+    #     with engine.begin() as conn:
+    #         query = text("""
+    #             INSERT INTO system_events (id, timestamp, service_name, environment, event_type, message, metadata)
+    #             VALUES (:id, :timestamp, :service_name, :environment, :event_type, :message, :metadata)
+    #         """)
+    #         conn.execute(query, batch_buffer)
 
-        batch_buffer.clear()
-        last_flush_time = time.time()
+    #     batch_buffer.clear()
+    #     last_flush_time = time.time()
 
-    except Exception as e:
-        print(f"Storage Error: {e}")
+    # except Exception as e:
+    #     print(f"Storage Error: {e}")
 
 
 
@@ -91,15 +91,16 @@ try:
         
         if msg is None:
             if time.time() - last_flush_time >= MAX_WAIT_TIME:
-                flush_to_destination()
+            #      flush_to_destination()
+                pass
             continue
         
         if msg.error():
             print(f"Consumer error: {msg.error()}")
             continue
 
-        print(f"Received message: {msg.value().decode('utf-8')}")
-
+        data = json.loads(msg.value().decode("utf-8"))
+        print(data)
 
 except KeyboardInterrupt:
     print("stopping Consumer")

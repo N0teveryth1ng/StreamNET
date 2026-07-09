@@ -12,7 +12,7 @@
         async function send() {
             const message = document.getElementById("msg").value;
 
-            const res = await fetch("/chat", {
+            const res = await fetch("/get_data", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -22,7 +22,7 @@
 
             const data = await res.json();
             console.log(data);
-            alert(data.reply);
+            alert(data.success);
         }
     </script>
 
