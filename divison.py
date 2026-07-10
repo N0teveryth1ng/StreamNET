@@ -4,20 +4,35 @@
 
 import os
 import json
-from kafka import KafkaConsumer
+from confluent_kafka import Consumer
+
+
 from crewai import Agent, Task, Crew, Process
-from langchain_openai import ChatOpenAI
-from langchain_community.tools.tavily_search import TavilySearchResults
+from crewai import LLM
+
+from crewai_tools import TavilySearchTool
+from dotenv import load_dotenv
 
 
+load_dotenv()
+
+
+# llm api keys (.env)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 
 
 # LLM here will be acting as a brain of the DIVISION
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)  #-- fetch from .env
+llm = LLM(
+    model="openrouter/openai/gpt-4o-mini",   # or another OpenRouter model
+    api_key=OPENROUTER_API_KEY,
+    max_tokens=1000,
+)
+
 
 # websearch tool -- TAVILY
-web_search = TavilySearchResults(api_key=".env")   #-- fetch from .env
+web_search = TavilySearchTool(api_key=TAVILY_API_KEY)   #-- fetch from .env
 
 
 
@@ -27,9 +42,18 @@ web_search = TavilySearchResults(api_key=".env")   #-- fetch from .env
 # researcher (with work with Tavily)
 researcher = Agent(
     role="Senior Technology Researcher",
-    goal="ncover cutting-edge developments in AI and technology.",
-    backstory="You are an expert researcher with a knack for finding the latest tech trends.",
-    tools=web_search,
+    goal="Always use Tavily for factual or current-event questions. Base your final answer ONLY on the search results. If the search contradicts your memory, trust the search.",
+    backstory="""
+        You are an expert researcher.
+        
+        Rules:
+        - ALWAYS use the Tavily search tool for factual, recent, or real-world questions.
+        - NEVER answer from memory if Tavily can answer.
+        - Base your final answer ONLY on Tavily's results.
+        - If the search results contradict your internal knowledge, trust the search.
+        - Keep answers concise unless asked otherwise.
+        """,
+    tools=[web_search],
     verbose=True,
     llm=llm
 )
@@ -46,13 +70,14 @@ writer = Agent(
 
 
 # kafka consumer for pager duty
-consumer = KafkaConsumer(
-    'market_trends', # <-- Make sure this matches your actual Kafka topic name!
-    bootstrap_servers=['localhost:9092'],
-    auto_offset_reset='latest',
-    value_deserializer=lambda x: json.loads(x.decode('utf-8'))
-)
+config = {
+    "bootstrap.servers": "localhost:9092",
+    "group.id": "division-group",
+    "auto.offset.reset": "latest"
+}
 
+consumer = Consumer(config)
+consumer.subscribe(["system_data"])
 
 
 print("Brain is active! waiting for messages")
@@ -60,17 +85,28 @@ print("Brain is active! waiting for messages")
 
 
 # The Real-Time Processing Loop
-for message in consumer:
+while True:
     
-        data = message.value.get("message")
-        print(f"Got the fucking data from the user - {data}  ")
+        msg = consumer.poll(1.0)
+    
+        if msg is None:
+            continue
+    
+        if msg.error():
+            print(msg.error())
+            continue
+    
+        data = json.loads(msg.value().decode("utf-8")).get("message")
+    
+        print(f"Got the fucking data from the user - {data}")
         print("🤖 Launching the DIVISION Agents for Battle ...")
-
+    
+    
     
         # research task
         researcher_task = Task(
-            description="Analyze the top 3 trends in Generative AI for 2026.",
-            expected_output="A bulleted list of the top 3 trends with a short summary for each.",
+            description=data,
+            expected_output="A bulleted list with short summary.",
             agent=researcher
         )
         
