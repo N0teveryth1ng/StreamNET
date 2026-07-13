@@ -1,53 +1,37 @@
-# Integrating PINECONE momory
-
-from pinecone import Pinecone
 import os
+import chromadb
+from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
-from dotenv import load_dotenv 
-
-
 
 load_dotenv()
 
-# call from .env
-pinecone_api = os.getenv("PINECONE_API_KEY")
+client = chromadb.CloudClient(
+    api_key=os.getenv("CHROMA_API_KEY"),
+    tenant=os.getenv("CHROMA_TENANT"),
+    database=os.getenv("CHROMA_DATABASE")
+)
 
-
-
-pc = Pinecone(api_key=pinecone_api)
-index = pc.Index("division-memory")
+collection = client.get_or_create_collection(
+    name="division_memory"
+)
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 
+def store_memory(id, text):
+    embedding = model.encode(text).tolist()
 
-# Store data
-def store_data(id, text):
-        embedding = model.encode(text).tolist()
-    
-        index.upsert([
-            {
-                "id": "doc1",
-                "values": embedding,
-                "metadata": {
-                    "text": "CrewAI is a framework for multi-agent systems."
-                }
-            }
-        ])
-
-
-
-# search memory
-def search_memory(query):
-    
-    embedding = model.encode(query).tolist()
-    
-    res = index.query(
-        vector=embedding,
-        top_k=3,
-        include_metadata=True
+    collection.add(
+        ids=[id],
+        documents=[text],
+        embeddings=[embedding]
     )
-    
-    return res
 
 
+def search_memory(query):
+    embedding = model.encode(query).tolist()
+
+    return collection.query(
+        query_embeddings=[embedding],
+        n_results=3
+    )

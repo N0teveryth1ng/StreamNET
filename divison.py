@@ -171,11 +171,19 @@ while True:
         
         
         print(" Divison is executing____>   (❁´◡`❁) ")
+
         result = tech_crew.kickoff()
+        
+        research_output = researcher_task.output
+        
+        print(type(research_output))
+        print(research_output)
+        
+        
         
         store_memory(
             id=str(uuid.uuid4()),
-            text=str(result)
+            text=research_output.raw
         )
         
         
