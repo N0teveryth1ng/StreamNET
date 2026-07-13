@@ -5,13 +5,17 @@
 import os
 import json
 from confluent_kafka import Consumer
-
+import uuid
 
 from crewai import Agent, Task, Crew, Process
 from crewai import LLM
 
 from crewai_tools import TavilySearchTool
 from dotenv import load_dotenv
+
+
+from memory import store_memory, search_memory
+
 
 
 load_dotenv()
@@ -59,14 +63,17 @@ researcher = Agent(
 )
 
 
+
 # writer
 writer = Agent(
     role="Tech Content Writer",
-    goal="Create engaging blog posts about technology.",
+    goal="Write ONLY from the research provided. Never invent facts or use your own knowledge ",
     backstory="You are a skilled writer who transforms complex technical data into simple articles.",
     verbose=True,
-    llm=llm
+    llm=llm,
+    allow_delegation=False
 )
+
 
 
 # kafka consumer for pager duty
@@ -97,28 +104,60 @@ while True:
             continue
     
         data = json.loads(msg.value().decode("utf-8")).get("message")
+        
+        # search memoery
+        memory = search_memory(data)
+        
+        print(memory)
+        
+        
     
         print(f"Got the fucking data from the user - {data}")
         print("🤖 Launching the DIVISION Agents for Battle ...")
     
     
-    
-        # research task
+        
+        # Build memory text
+        memory_text = ""
+        
+        try:
+            for match in memory["matches"]:
+                memory_text += match["metadata"]["text"] + "\n"
+        except KeyError:
+            memory_text = "No relevant memory found."
+        
+        
+        # Research Task
         researcher_task = Task(
-            description=data,
+            description=f""" User Question: {data} Relevant Memory:
+        {memory_text}
+        
+        Instructions:
+        - Use the above memory if it is relevant.
+        - For factual or recent information, ALWAYS verify using Tavily.
+        - If Tavily contradicts the memory, trust Tavily.
+        - Return a concise bulleted summary.
+        """,
             expected_output="A bulleted list with short summary.",
             agent=researcher
         )
         
         
-        # writer task
+        # Writer Task
         writer_task = Task(
-            description="Using the insights provided by the researcher, write a short, compelling 2-paragraph blog post.",
-            expected_output="A 2-paragraph blog post ready for publishing.",
-            agent=writer
+            description="""
+        Using ONLY the researcher's findings, write a clear 2-paragraph article.
+        
+        Rules:
+        - Do NOT use your own knowledge.
+        - Do NOT perform any research.
+        - Do NOT invent facts.
+        - Only rewrite and improve the researcher's output.
+        """,
+            expected_output="A 2-paragraph blog post.",
+            agent=writer,
+            context=[researcher_task]
         )
-        
-        
         
         # tech crew
         tech_crew = Crew(
@@ -131,9 +170,16 @@ while True:
         
         
         
-        print(" Divison is executing  -- (❁´◡`❁) ")
+        print(" Divison is executing____>   (❁´◡`❁) ")
         result = tech_crew.kickoff()
+        
+        store_memory(
+            id=str(uuid.uuid4()),
+            text=str(result)
+        )
         
         
         print("FINAL OUTPUT - ")
         print(result)
+        
+        
